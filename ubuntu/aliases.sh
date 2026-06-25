@@ -35,13 +35,14 @@ wifi-doctor() {
 
   printf '%-18s' "$IF link:"
   if ip link show "$IF" >/dev/null 2>&1; then
-    # operstate is the REAL state — flags can say UP while the radio has no carrier
-    local st; st=$(cat "/sys/class/net/$IF/operstate" 2>/dev/null)
-    case "$st" in
-      up|unknown) echo "$P $st" ;;
-      down)       echo "$F DOWN/no-carrier — radio not beaconing. Is hostapd serving $IF? ('ap-status')" ;;
-      *)          echo "$W ${st:-unknown} — 'sudo ip link set $IF up'" ;;
-    esac
+    # For an AP (master mode) operstate/carrier lies — the AP IS the carrier.
+    # The real "is it beaconing" signal is: iw reports type AP and a channel.
+    local typ chan
+    typ=$(iw dev "$IF" info 2>/dev/null | awk '$1=="type"{print $2}')
+    chan=$(iw dev "$IF" info 2>/dev/null | awk '$1=="channel"{print $2}')
+    if [ "$typ" = "AP" ] && [ -n "$chan" ]; then echo "$P AP up (ch $chan)"
+    elif ip link show "$IF" | grep -qw UP;     then echo "$W admin-up, type=${typ:-?} (not an active AP)"
+    else echo "$F admin DOWN — 'sudo ip link set $IF up'"; fi
   else
     echo "$F interface not found"
   fi
