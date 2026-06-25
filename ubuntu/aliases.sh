@@ -48,8 +48,8 @@ wifi-doctor() {
   else echo "$W rfkill not installed"; fi
 
   printf '%-18s' "reg domain:"
-  local reg; reg=$(iw reg get 2>/dev/null | awk -F: '/country/{gsub(/ /,"",$2); print $2; exit}')
-  if [ -z "$reg" ] || [ "${reg%%:*}" = "00" ]; then
+  local reg; reg=$(iw reg get 2>/dev/null | awk '/^country/{gsub(/:/,"",$2); print $2; exit}')
+  if [ -z "$reg" ] || [ "$reg" = "00" ]; then
     echo "$W unset (00) — 5GHz/channels limited. 'wifi-country-dk'"
   else echo "$P $reg"; fi
 
@@ -83,6 +83,21 @@ wifi-doctor() {
   echo "──────────────────────────────────────────────"
 }
 alias wifi-debug='wifi-doctor'                               # alias for wifi-doctor
+
+# Show each wireless interface with its band (2.4 vs 5 GHz), channel and SSID.
+wifi-bands() {
+  local d info ssid chan mhz band
+  for d in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
+    info=$(iw dev "$d" info 2>/dev/null)
+    ssid=$(printf '%s\n' "$info" | awk '/\<ssid\>/{print $2}')
+    chan=$(printf '%s\n' "$info" | awk '/\<channel\>/{print $2}')
+    mhz=$(printf '%s\n'  "$info" | grep -oE '[0-9]+ MHz' | head -1 | grep -oE '[0-9]+')
+    if   [ -z "$mhz" ];                  then band="(idle)"   # not on a channel = AP down/inactive
+    elif [ "$mhz" -ge 5000 ] 2>/dev/null; then band="5 GHz"
+    else                                      band="2.4 GHz"; fi
+    printf '%-6s %-8s ch %-4s ssid=%s\n' "$d" "$band" "${chan:-–}" "${ssid:-(none)}"
+  done
+}
 
 # ── interface control (usage: wlan-up wlan0 / wlan-down wlan0) ──────────────
 wlan-up()   { sudo ip link set "${1:-wlan0}" up; }            # bring an interface up (default wlan0)
