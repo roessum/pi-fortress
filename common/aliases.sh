@@ -122,3 +122,34 @@ ssh-agent-ensure() {
   (umask 077; ssh-agent -s > "$env") && . "$env" >/dev/null 2>&1   # start a fresh persistent agent
 }
 case $- in *i*) ssh-agent-ensure 2>/dev/null ;; esac   # auto-run in interactive shells
+
+# ── /etc/hosts & SSH tunnels ────────────────────────────────────────────────
+alias host-show='cat /etc/hosts'                   # show the hosts file
+alias port-test='nc -zv'                           # is a port open?  port-test host 8180
+host-add() {   # host-add <ip> <name> — add (or replace) an /etc/hosts entry
+  local ip="$1" name="$2" tmp
+  { [ -n "$ip" ] && [ -n "$name" ]; } || { echo "usage: host-add <ip> <name>"; return 1; }
+  tmp=$(mktemp)
+  grep -vE "[[:space:]]$name(\$|[[:space:]])" /etc/hosts > "$tmp" 2>/dev/null
+  printf '%s\t%s\n' "$ip" "$name" >> "$tmp"
+  sudo cp "$tmp" /etc/hosts && rm -f "$tmp" && echo "hosts: $ip -> $name"
+}
+host-del() {   # host-del <name> — remove an /etc/hosts entry
+  local name="$1" tmp; [ -n "$name" ] || { echo "usage: host-del <name>"; return 1; }
+  tmp=$(mktemp)
+  grep -vE "[[:space:]]$name(\$|[[:space:]])" /etc/hosts > "$tmp"
+  sudo cp "$tmp" /etc/hosts && rm -f "$tmp" && echo "removed $name"
+}
+# Open a website that lives on a remote SSH host's port, locally in your browser.
+# Forwards your localhost:<port> to the host's own localhost:<port> over SSH, and
+# (optionally) adds a pretty /etc/hosts name pointing at 127.0.0.1.
+# Usage: ssh-web <user@host> [port] [hostname]
+#   ssh-web me@server 8180 mysite.local   ->  http://mysite.local:8180
+ssh-web() {
+  local target="$1" port="${2:-8180}" name="$3"
+  [ -n "$target" ] || { echo "usage: ssh-web <user@host> [port] [hostname]"; return 1; }
+  [ -n "$name" ] && host-add 127.0.0.1 "$name"
+  echo "tunnel: localhost:$port -> $target (its localhost:$port).  Ctrl-C to stop."
+  echo "open:   http://${name:-localhost}:$port"
+  ssh -N -L "127.0.0.1:$port:localhost:$port" "$target"
+}
