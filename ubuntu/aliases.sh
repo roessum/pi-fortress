@@ -154,6 +154,48 @@ alias link-show='ip link show'                                # full link detail
 alias link-up='sudo ip link set'                              # set an iface up:  link-up wlan0 up
 alias link-stats='ip -s link'                                 # per-interface RX/TX stats
 
+# ── routing / connectivity health check ─────────────────────────────────────
+# Test the whole router path: forwarding, local IPs, route, internet, DNS, NAT.
+net-doctor() {
+  local P="✓" W="⚠" F="✗" a gw
+  printf '── net-doctor ──────────────────────────────\n'
+
+  printf '%-20s' "ip_forward:"
+  if [ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null)" = "1" ]; then echo "$P enabled"
+  else echo "$F OFF — routing dead. 'sudo sysctl -w net.ipv4.ip_forward=1' + /etc/sysctl.conf"; fi
+
+  echo "interfaces & IPs:"
+  ip -br -4 addr 2>/dev/null | awk '$1!="lo"{printf "    %-8s %-7s %s\n",$1,$2,$3}'
+
+  printf '%-20s' "local IPs respond:"; echo
+  for a in $(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1); do
+    if ping -c1 -W1 "$a" >/dev/null 2>&1; then echo "    $P $a"; else echo "    $F $a not responding"; fi
+  done
+
+  gw=$(ip route show default 2>/dev/null | awk '/default/{print $3; exit}')
+  printf '%-20s' "default route:"
+  if [ -n "$gw" ]; then echo "$P via $gw"; else echo "$F none — no path off the LAN"; fi
+
+  printf '%-20s' "gateway reachable:"
+  if [ -n "$gw" ] && ping -c1 -W1 "$gw" >/dev/null 2>&1; then echo "$P $gw"; else echo "$F can't reach ${gw:-gateway}"; fi
+
+  printf '%-20s' "internet (1.1.1.1):"
+  if ping -c1 -W2 1.1.1.1 >/dev/null 2>&1; then echo "$P reachable"; else echo "$F no internet — check NAT/route"; fi
+
+  printf '%-20s' "DNS resolves:"
+  if getent hosts github.com >/dev/null 2>&1; then echo "$P ok"; else echo "$W fails (but ping-by-IP worked? then it's DNS)"; fi
+
+  printf '%-20s' "NAT (masquerade):"
+  if sudo nft list ruleset 2>/dev/null | grep -q masquerade; then echo "$P present"
+  else echo "$W none — AP clients can't reach the internet"; fi
+
+  printf '%-20s' "forward rules:"
+  if sudo nft list ruleset 2>/dev/null | grep -qiE 'chain .*forward|type filter hook forward'; then echo "$P forward chain present"
+  else echo "$W no forward chain — clients between subnets/WAN may be blocked"; fi
+  echo "──────────────────────────────────────────────"
+}
+alias net-test='net-doctor'                                   # alias for net-doctor
+
 # ── web server (Caddy — auto HTTPS) ─────────────────────────────────────────
 alias web-conf='sudo nano /etc/caddy/Caddyfile'               # edit the site config
 alias web-test='sudo caddy validate --config /etc/caddy/Caddyfile'  # check config is valid
