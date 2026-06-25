@@ -11,6 +11,32 @@ cmd-update() {
 }
 alias cmd-edit='${EDITOR:-nano} "${CMDBOOK_DIR:-$HOME/cmdbook}"'   # open the repo to add aliases
 
+# Browse the book by category (the "# ── ... ──" section headers).
+#   cmdbook                     list every platform and its categories
+#   cmdbook ubuntu              list categories for one platform
+#   cmdbook ubuntu network      show the commands in matching categories
+cmdbook() {
+  local dir="${CMDBOOK_DIR:-$HOME/cmdbook}" plat="$1" filter="$2" f p
+  if [ -z "$plat" ]; then
+    echo "usage: cmdbook <platform> [category]   e.g. cmdbook ubuntu network"
+    for p in common ubuntu macos windows; do
+      f="$dir/$p/aliases.sh"; [ -f "$f" ] || continue
+      printf '\n[%s]\n' "$p"; grep '^# ──' "$f" | sed 's/^# //'
+    done; return
+  fi
+  f="$dir/$plat/aliases.sh"
+  [ -f "$f" ] || { echo "no such platform: $plat (try: common ubuntu macos windows)"; return 1; }
+  if [ -z "$filter" ]; then
+    echo "[$plat] categories — 'cmdbook $plat <name>' to open one:"
+    grep '^# ──' "$f" | sed 's/^# //'; return
+  fi
+  awk -v want="$(printf %s "$filter" | tr 'A-Z' 'a-z')" '
+    /^# ──/ { show=(index(tolower($0),want)>0); if(show) printf "\n%s\n", substr($0,3); next }
+    !show { next }
+    /^alias / || /^[A-Za-z0-9_-]+\(\)/ || /^# / { print }
+  ' "$f"
+}
+
 # ── git: status & history ──────────────────────────────────────────────────
 alias gs='git status -sb'                          # short status + branch info
 alias gl='git log --oneline --graph --all'         # compact, visual history

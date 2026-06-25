@@ -56,6 +56,20 @@ fw               # show the nftables ruleset
 sshkey           # print my SSH public key
 ```
 
+## Browse by category
+
+The `# ── … ──` section headers are the categories. Browse them without
+leaving the shell:
+
+```bash
+cmdbook                  # every platform and its categories
+cmdbook ubuntu           # categories on the Pi (wifi, dns, dhcp, nftables…)
+cmdbook ubuntu network   # show the commands in matching categories
+```
+
+The last argument is a case-insensitive filter on the category name — try
+`git`, `ssh`, `wifi`, `route`, `firewall`, `wireguard`, …
+
 ## Add what you forget
 
 Drop a new `alias name='command'  # what it does` line in the right `aliases.sh`
